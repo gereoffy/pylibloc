@@ -1,0 +1,43 @@
+MAGIC:  8 byte ascii "LOCDBXX" + 1 byte version (1)
+
+HEADERv1:
+
+0:	// UNIX timestamp when the database was created
+	uint64_t created_at;
+
+8:	// Vendor who created the database
+	uint32_t vendor;
+12:	// Description of the database
+	uint32_t description;
+16:	// License of the database
+	uint32_t license;
+
+	// Tells us where the ASes start
+20:	uint32_t as_offset;
+24:	uint32_t as_length;
+
+	// Tells us where the networks start
+28:	uint32_t network_data_offset;
+32:	uint32_t network_data_length;
+
+	// Tells us where the network nodes start
+36:	uint32_t network_tree_offset;
+40:	uint32_t network_tree_length;
+
+	// Tells us where the countries start
+44:	uint32_t countries_offset;
+48:	uint32_t countries_length;
+
+	// Tells us where the pool starts
+52:	uint32_t pool_offset;
+56:	uint32_t pool_length;
+
+	// Signatures
+60:	uint16_t signature1_length;
+	uint16_t signature2_length;
+
+64:	char signature1[LOC_SIGNATURE_MAX_LENGTH];  // 2048 bytes
+	char signature2[LOC_SIGNATURE_MAX_LENGTH];
+
+	// Add some padding for future extensions
+	char padding[32];
