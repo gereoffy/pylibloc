@@ -6,6 +6,7 @@ Works:
 - open and check magic
 - load database headers & data
 - print vendor/license strings :)
+- IPv6 address lookup
 
 TODO:
-- IP lookup :)
+- IPv4 lookup :)
