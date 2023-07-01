@@ -87,27 +87,6 @@ class LocDB:
     j=s.find(b'\x00')
     return s[:j].decode("utf-8")
 
-  def lookuptree(self,address,pos=0,level=0,debug=True):
-
-    # return ((address->s6_addr[i / 8] >> (7 - (i % 8))) & 1);
-    bit=(address[level//8] >> (7-(level&7)) )&1
-
-#    bit=(address[level>>8]>>(level&7))&1
-    node=self.data["nt"][pos*12:pos*12+12]
-
-    zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
-    one= int.from_bytes(node[4:8],byteorder="big",signed=False)
-    net= int.from_bytes(node[8:12],byteorder="big",signed=True)
-
-#    print("level:",level,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net,"node:",node.hex(' '))
-    if debug: print("level:",level,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
-
-    nxt=one if bit else zero
-    if nxt:
-        # continue walking the tree...
-        return self.lookuptree(address,nxt,level+1)
-    return net
-
   def get_as(self, asfind):
     # FIXME: do binary search!
     pos=0
@@ -120,25 +99,50 @@ class LocDB:
         if asn==asfind: return self.getstr(nid)
     return "N/A"
 
-  def lookup(self, address):
+  def get_cc(self, ccfind):
+    pos=0
+    while pos<len(self.data["co"]):
+        node=self.data["co"][pos:pos+8]  # (code+continent+name)
+        pos+=8
+        cont=node[2:4]
+        nid=int.from_bytes(node[4:8],byteorder="big",signed=False)
+        if node[0:2]==ccfind: return ccfind.decode(),cont.decode(),self.getstr(nid)
+    return None
+
+  def lookuptree(self,address,pos=0,level=0,debug=False):
+    bit=(address[level//8] >> (7-(level&7)) )&1
+    node=self.data["nt"][pos*12:pos*12+12]
+    zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
+    one= int.from_bytes(node[4:8],byteorder="big",signed=False)
+    net= int.from_bytes(node[8:12],byteorder="big",signed=True)
+    if debug: print("level:",level,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
+
+    nxt=one if bit else zero
+    if nxt:
+        # continue walking the tree...
+        net2=self.lookuptree(address,nxt,level+1)
+        if net2>=0: return net2
+
+    return net
+
+  def lookup6(self, address):
     pos=self.lookuptree(address)
     if pos<0: return # not found
     node=self.data["nd"][pos*12:pos*12+12]
-#    asn= int.from_bytes(node[2:6],byteorder="big",signed=False)
+    co=node[0:2] # country code
     asn=int.from_bytes(node[4:8],byteorder="big",signed=False)
     ass=self.get_as(asn)
-    print(pos,node[0:2],asn,ass,node.hex(' '))
+    cos=self.get_cc(co)
+    # print(pos,node[0:2],asn,ass,node.hex(' '))
+    return cos,asn,ass
+
+  def lookup4(self, address):
+    return self.lookup6( bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address )
 
 
-db=LocDB()
+if __name__ == "__main__":
 
-#addr=bytes([193,224,41,22])
-#addr=bytes([0,0,0,0,0xFF,0xFF,0,0,  193,224,41,22])
-#addr=bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF,  193,224,41,22])
-
-#addr=bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])  # 2a01:6ee0:1:201::bad:c0de
-#addr=bytes([0x2a,1,0xae,0x20, 8,1, 0x17,0x98,  0,0,0,0,0,0,0,1]) # 2a01:ae20:801:1798::1
-addr=bytes([0x2a,2,7,0x30, 0x40,0, 0,0,  0,0,0,0,0,0,0,0xe0]) # 2a02:730:4000::e0
-
-db.lookup(addr)
+    db=LocDB()
+    print(db.lookup4(bytes([193,224,41,22])))
+    print(db.lookup6(bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])))
 
