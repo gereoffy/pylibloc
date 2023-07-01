@@ -2,8 +2,14 @@
 
 class LocDB:
   def __init__(self,fn="/var/lib/location/database.db",debug=0):
-    f=open(fn,"rb")
+
+    if fn.endswith(".xz"):
+        import lzma
+        f=lzma.open(fn,"rb")
+    else:
+        f=open(fn,"rb")
     magic=f.read(8)    # 7 bytes magic + 1 byte version
+
     if debug:
         print(magic[0:7],magic[7])
     if magic!=b'LOCDBXX\x01':
@@ -18,24 +24,21 @@ class LocDB:
         print(header[48:64].hex(' '))
 
     def getint(i,l=4): return int.from_bytes(header[i:i+l],byteorder="big",signed=False)
-    
-    self.data={}
-    total=0  # total data length
-    maxoff=0 # max data offset, should be (less or) equal to filesize
-    pos=20
-    for i in ["as","nd","nt","co","po"]:
-        offset=getint(pos)
-        length=getint(pos+4)
-        if debug: print(i,offset,length)
-        pos+=8
-        total+=length
-        if offset+length>maxoff: maxoff=offset+length
-        f.seek(offset)
-        self.data[i]=f.read(length)
 
+    # read data!
+    blocks=sorted([ [getint(pos),getint(pos+4),i] for pos,i in [(20,"as"),(28,"nd"),(36,"nt"),(44,"co"),(52,"po")] ]) # data block positions
+    self.data={}
+    fpos=8+64
+    for offset,length,i in blocks:
+        if debug: print(i,offset,length,offset+length,offset-fpos)
+        f.read(offset-fpos) #  f.seek(offset)
+        self.data[i]=f.read(length)
+        fpos=offset+length
     f.close()
 
     if debug:
+        total=sum(b[1] for b in blocks)
+        maxoff=max(b[0]+b[1] for b in blocks)
         print("Total data length:",total, maxoff)
         s1_length=getint(60,2)
         s2_length=getint(62,2)
@@ -45,6 +48,7 @@ class LocDB:
     self.vendor=self.getstr(getint(8))
     self.descr=self.getstr(getint(12))
     self.license=self.getstr(getint(16))
+
 
     if debug>1:
         pos=0
@@ -128,7 +132,7 @@ class LocDB:
 
 if __name__ == "__main__":
 
-    db=LocDB()
+    db=LocDB("location.db.xz")
     print(db.lookup4(bytes([193,224,41,22])))
     print(db.lookup6(bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])))
     print(db.lookup("1.1.1.1"))
