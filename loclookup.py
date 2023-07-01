@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 
 class LocDB:
-  def __init__(self,fn="/var/lib/location/database.db",debug=1):
+  def __init__(self,fn="/var/lib/location/database.db",debug=0):
     f=open(fn,"rb")
     magic=f.read(8)    # 7 bytes magic + 1 byte version
     if debug:
@@ -16,18 +16,6 @@ class LocDB:
         print(header[16:32].hex(' '))
         print(header[32:48].hex(' '))
         print(header[48:64].hex(' '))
-
-#                createdate|     vendor|      descr
-#   00 00 00 00 64 9f b3 b0 00 00 00 01 00 00 00 10
-
-#   license    | AS-offset | AS-length | ND-offset
-#   00 00 00 a2 00 00 20 00 00 0b d7 28 02 69 f0 00
-
-#    ND-length | NT-offset | NT-length | CO-offset
-#   00 f9 17 a0 00 0c 00 00 02 5d e5 90 03 63 10 00
-
-#    CO-length | Pool-offs | Pool-len  | sig1| sig2
-#   00 00 07 f0 03 63 20 00 00 19 e5 e7 00 8b 00 00
 
     def getint(i,l=4): return int.from_bytes(header[i:i+l],byteorder="big",signed=False)
     
@@ -44,24 +32,19 @@ class LocDB:
         if offset+length>maxoff: maxoff=offset+length
         f.seek(offset)
         self.data[i]=f.read(length)
-#        if debug: print(self.data[i][:64])
 
     f.close()
 
-    if debug:    
+    if debug:
         print("Total data length:",total, maxoff)
         s1_length=getint(60,2)
         s2_length=getint(62,2)
         print("Signature lengths:",s1_length,s2_length)
 
-    print("Vendor: ",self.getstr(getint(8)))
-    print("Descr.: ",self.getstr(getint(12)))
-    print("License:",self.getstr(getint(16)))
-
-#    map_objects("co",8) # 2+2+4 bytes (code+continent+name)
-#    map_objects("as",8) # 4+4 bytes   (Asnumber+name)
-#    map_objects("nd",10) # 2+4+2+2    (country+asn+flags+padding)
-#    map_objects("nt",12) # 4+4+4      (zero+one+net)
+    self.date=getint(0,8)
+    self.vendor=self.getstr(getint(8))
+    self.descr=self.getstr(getint(12))
+    self.license=self.getstr(getint(16))
 
     if debug>1:
         pos=0
@@ -91,58 +74,63 @@ class LocDB:
     # FIXME: do binary search!
     pos=0
     while pos<len(self.data["as"]):
-        node=self.data["as"][pos:pos+8]
+        if asfind==int.from_bytes(self.data["as"][pos:pos+4],byteorder="big",signed=False):
+            nid=int.from_bytes(self.data["as"][pos+4:pos+8],byteorder="big",signed=False)
+            return self.getstr(nid)
         pos+=8
-        asn=int.from_bytes(node[0:4],byteorder="big",signed=False)
-        nid=int.from_bytes(node[4:8],byteorder="big",signed=False)
-#        print(asn,nid,self.getstr(nid))
-        if asn==asfind: return self.getstr(nid)
     return "N/A"
 
   def get_cc(self, ccfind):
     pos=0
     while pos<len(self.data["co"]):
-        node=self.data["co"][pos:pos+8]  # (code+continent+name)
+        if ccfind==self.data["co"][pos:pos+2]:     # (code+continent+name)
+            cont=self.data["co"][pos+2:pos+4]      # continent code (2 ascii chars)
+            nid=int.from_bytes(self.data["co"][pos+4:pos+8],byteorder="big",signed=False)
+            return ccfind.decode(),cont.decode(),self.getstr(nid)
         pos+=8
-        cont=node[2:4]
-        nid=int.from_bytes(node[4:8],byteorder="big",signed=False)
-        if node[0:2]==ccfind: return ccfind.decode(),cont.decode(),self.getstr(nid)
     return None
 
-  def lookuptree(self,address,pos=0,level=0,debug=False):
-    bit=(address[level//8] >> (7-(level&7)) )&1
+  def lookuptree(self,address,pos=0,mask=0,debug=False):
+    bit=(address[mask//8] >> (7-(mask&7)) )&1
     node=self.data["nt"][pos*12:pos*12+12]
-    zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
-    one= int.from_bytes(node[4:8],byteorder="big",signed=False)
-    net= int.from_bytes(node[8:12],byteorder="big",signed=True)
-    if debug: print("level:",level,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
-
-    nxt=one if bit else zero
+    nxt=int.from_bytes(node[4*bit:4*bit+4],byteorder="big",signed=False)
+    net=int.from_bytes(node[8:12],byteorder="big",signed=True)
+    if debug:
+        zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
+        one= int.from_bytes(node[4:8],byteorder="big",signed=False)
+        print("mask:",mask,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
     if nxt:
         # continue walking the tree...
-        net2=self.lookuptree(address,nxt,level+1)
-        if net2>=0: return net2
+        net2,mask2=self.lookuptree(address,nxt,mask+1)
+        if net2>=0: return net2,mask2
+    return net,mask
 
-    return net
-
-  def lookup6(self, address):
-    pos=self.lookuptree(address)
+  def lookup6(self, address, map4=False):
+    if map4: address=bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address   # map IPv4 to IPv6
+    pos,mask=self.lookuptree(address)
     if pos<0: return # not found
     node=self.data["nd"][pos*12:pos*12+12]
     co=node[0:2] # country code
     asn=int.from_bytes(node[4:8],byteorder="big",signed=False)
-    ass=self.get_as(asn)
-    cos=self.get_cc(co)
+    flags=int.from_bytes(node[8:10],byteorder="big",signed=False)
+    ass=self.get_as(asn) # AS number
+    cos=self.get_cc(co)  # Country name & continent code
     # print(pos,node[0:2],asn,ass,node.hex(' '))
-    return cos,asn,ass
+    return cos,asn,ass,flags,mask-12*8 if map4 else mask
 
   def lookup4(self, address):
-    return self.lookup6( bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address )
+    return self.lookup6(address,True)
 
+  def lookup(self, addrstr):
+    from ipaddress import ip_address
+    address=ip_address(addrstr).packed # string -> bytes
+    return self.lookup6(address, len(address)==4)
 
 if __name__ == "__main__":
 
     db=LocDB()
     print(db.lookup4(bytes([193,224,41,22])))
     print(db.lookup6(bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])))
+    print(db.lookup("1.1.1.1"))
+    print(db.lookup("2a00:1450:400d:806::2005"))
 
