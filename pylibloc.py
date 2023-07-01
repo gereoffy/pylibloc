@@ -99,7 +99,7 @@ class LocDB:
         zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
         one= int.from_bytes(node[4:8],byteorder="big",signed=False)
         print("mask:",mask,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
-    if nxt:
+    if nxt and mask<len(address)*8:
         # continue walking the tree...
         net2,mask2=self.lookuptree(address,nxt,mask+1)
         if net2>=0: return net2,mask2
@@ -109,12 +109,12 @@ class LocDB:
     if map4: address=bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address   # map IPv4 to IPv6
     pos,mask=self.lookuptree(address)
     if pos<0: return # not found
-    node=self.data["nd"][pos*12:pos*12+12]
+    node=self.data["nd"][pos*12:pos*12+12] # network data: countrycode(2) + padding(2) + ASN(4) + flags(2) +padding(2)
     co=node[0:2] # country code
     asn=int.from_bytes(node[4:8],byteorder="big",signed=False)
     flags=int.from_bytes(node[8:10],byteorder="big",signed=False)
-    ass=self.get_as(asn) # AS number
-    cos=self.get_cc(co)  # Country name & continent code
+    ass=self.get_as(asn) # AS: string from number
+    cos=self.get_cc(co)  # Country code, continent code & country name
     # print(pos,node[0:2],asn,ass,node.hex(' '))
     return cos,asn,ass,flags,mask-12*8 if map4 else mask
 
