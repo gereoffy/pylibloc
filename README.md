@@ -1,12 +1,12 @@
 # pylibloc - Pure python libloc (location.db) implementation
 
-under development...
+Get database from:
+- https://location.ipfire.org/databases/1/location.db.xz
 
-Works:
+Working:
 - open and check magic
 - load database headers & data
-- print vendor/license strings :)
-- IPv4 & IPv6 address lookup
+- IPv4 & IPv6 address lookup (from bytes or string format)
 
 TODO:
 - cleanup, maybe better API...
