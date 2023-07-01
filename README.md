@@ -4,17 +4,16 @@ Get database from:
 - https://location.ipfire.org/databases/1/location.db.xz
 
 Working:
-- open and check magic
-- load database headers & data
+- open database (even from xz file) and check magic
+- load database headers & data (in linear order)
 - IPv4 & IPv6 address lookup (from bytes or string format)
 
 TODO:
-- cleanup, maybe better API...
-- speed optim, binary search etc
+- maybe a better API...
 
 Usage:
 
-    db=LocDB()
+    db=LocDB("location.db.xz")
     print(db.lookup4(bytes([193,224,41,22])))
     print(db.lookup6(bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])))
     print(db.lookup("1.1.1.1"))
