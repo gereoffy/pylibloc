@@ -8,13 +8,10 @@ class LocDB:
         f=lzma.open(fn,"rb")
     else:
         f=open(fn,"rb")
-    magic=f.read(8)    # 7 bytes magic + 1 byte version
 
-    if debug:
-        print(magic[0:7],magic[7])
-    if magic!=b'LOCDBXX\x01':
-        print("Invalid database format")
-        return None
+    magic=f.read(8)    # 7 bytes magic + 1 byte version
+    if debug: print(magic[0:7],magic[7])
+    if magic!=b'LOCDBXX\x01': raise Exception("Unknown database format!")
 
     header=f.read(64)
     if debug>1:
@@ -49,7 +46,6 @@ class LocDB:
     self.descr=self.getstr(getint(12))
     self.license=self.getstr(getint(16))
 
-
     if debug>1:
         pos=0
         maxnet=0
@@ -75,13 +71,15 @@ class LocDB:
     return s[:j].decode("utf-8")
 
   def get_as(self, asfind):
-    # FIXME: do binary search!
-    pos=0
-    while pos<len(self.data["as"]):
-        if asfind==int.from_bytes(self.data["as"][pos:pos+4],byteorder="big",signed=False):
-            nid=int.from_bytes(self.data["as"][pos+4:pos+8],byteorder="big",signed=False)
+    p1,p2=0,len(self.data["as"])//8
+    while p2>p1:
+        pos=(p1+p2)//2  # do binary search!
+        x=int.from_bytes(self.data["as"][pos*8:pos*8+4],byteorder="big",signed=False)
+        if asfind==x:
+            nid=int.from_bytes(self.data["as"][pos*8+4:pos*8+8],byteorder="big",signed=False)
             return self.getstr(nid)
-        pos+=8
+        if asfind>x: p1=pos
+        else: p2=pos
     return "N/A"
 
   def get_cc(self, ccfind):
