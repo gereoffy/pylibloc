@@ -1,5 +1,9 @@
 # pylibloc - Pure python libloc (location.db) implementation
 
+libloc is a maxmind-GeoIP alternative to lookup IPv4/IPv6 address geo-location.
+
+Also look at my minimal C implementation here:  https://github.com/gereoffy/ipstat46/blob/main/nanolibloc.c
+
 Get database from:
 - https://location.ipfire.org/databases/1/location.db.xz
 
