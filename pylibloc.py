@@ -72,13 +72,13 @@ class LocDB:
 
   def get_as(self, asfind):
     p1,p2=0,len(self.data["as"])//8
-    while p2>p1:
+    while p1<p2:
         pos=(p1+p2)//2  # do binary search!
         x=int.from_bytes(self.data["as"][pos*8:pos*8+4],byteorder="big",signed=False)
         if asfind==x:
             nid=int.from_bytes(self.data["as"][pos*8+4:pos*8+8],byteorder="big",signed=False)
             return self.getstr(nid)
-        if asfind>x: p1=pos
+        if asfind>x: p1=pos+1
         else: p2=pos
     return "N/A"
 
@@ -92,20 +92,23 @@ class LocDB:
         pos+=8
     return None
 
-  def lookuptree(self,address,pos=0,mask=0,debug=False):
-    bit=(address[mask//8] >> (7-(mask&7)) )&1
-    node=self.data["nt"][pos*12:pos*12+12]
-    nxt=int.from_bytes(node[4*bit:4*bit+4],byteorder="big",signed=False)
-    net=int.from_bytes(node[8:12],byteorder="big",signed=True)
-    if debug:
+  def lookuptree(self,address,debug=False):
+    ret=None
+    nxt=0
+    mask=0
+    while mask<len(address)*8:
+      bit=(address[mask//8] >> (7-(mask&7)) )&1
+      node=self.data["nt"][nxt*12:nxt*12+12]
+      net=int.from_bytes(node[8:12],byteorder="big",signed=True)
+      if debug:
         zero=int.from_bytes(node[0:4],byteorder="big",signed=False)
         one= int.from_bytes(node[4:8],byteorder="big",signed=False)
-        print("mask:",mask,"pos:",pos,"bit:",bit,"next:",zero,one,"net:",net)
-    if nxt and mask<len(address)*8:
-        # continue walking the tree...
-        net2,mask2=self.lookuptree(address,nxt,mask+1)
-        if net2>=0: return net2,mask2
-    return net,mask
+        print("mask:",mask,"pos:",nxt,"bit:",bit,"next:",zero,one,"net:",net)
+      if net>=0: ret=(net,mask)
+      nxt=int.from_bytes(node[4*bit:4*bit+4],byteorder="big",signed=False)
+      if nxt==0: break
+      mask+=1
+    return ret
 
   def lookup6(self, address, map4=False):
     if map4: address=bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address   # map IPv4 to IPv6
