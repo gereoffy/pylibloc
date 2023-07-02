@@ -46,6 +46,13 @@ class LocDB:
     self.descr=self.getstr(getint(12))
     self.license=self.getstr(getint(16))
 
+    # find root node for mapped IPv4 lookups:  [0000:0000:0000:0000:0000:FFFF:xxxx:xxxx/96]
+    nxt=0
+    for i in range(10*8): nxt=int.from_bytes(self.data["nt"][nxt*12:nxt*12+4],byteorder="big",signed=False)
+    for i in range(2*8):  nxt=int.from_bytes(self.data["nt"][nxt*12+4:nxt*12+8],byteorder="big",signed=False)
+    self.v4root=nxt
+    if debug: print("IPv4 root node:",nxt)
+
     if debug>1:
         pos=0
         maxnet=0
@@ -92,9 +99,8 @@ class LocDB:
         pos+=8
     return None
 
-  def lookuptree(self,address,debug=False):
-    ret=None
-    nxt=0
+  def lookuptree(self,address,nxt=0,debug=False):
+    ret=(-1,0)
     mask=0
     while mask<len(address)*8:
       bit=(address[mask//8] >> (7-(mask&7)) )&1
@@ -111,8 +117,7 @@ class LocDB:
     return ret
 
   def lookup6(self, address, map4=False):
-    if map4: address=bytes([0,0,0,0,  0,0,0,0,  0,0,0xFF,0xFF]) + address   # map IPv4 to IPv6
-    pos,mask=self.lookuptree(address)
+    pos,mask=self.lookuptree(address,self.v4root if map4 else 0)
     if pos<0: return # not found
     node=self.data["nd"][pos*12:pos*12+12] # network data: countrycode(2) + padding(2) + ASN(4) + flags(2) +padding(2)
     co=node[0:2] # country code
@@ -121,7 +126,7 @@ class LocDB:
     ass=self.get_as(asn) # AS: string from number
     cos=self.get_cc(co)  # Country code, continent code & country name
     # print(pos,node[0:2],asn,ass,node.hex(' '))
-    return cos,asn,ass,flags,mask-12*8 if map4 else mask
+    return cos,asn,ass,flags,mask
 
   def lookup4(self, address):
     return self.lookup6(address,True)
@@ -133,7 +138,12 @@ class LocDB:
 
 if __name__ == "__main__":
 
-    db=LocDB("location.db.xz")
+  db=LocDB("location.db.xz")
+
+  import sys
+  if len(sys.argv)>1:
+    for ip in sys.argv[1:]: print(db.lookup(ip))
+  else:
     print(db.lookup4(bytes([193,224,41,22])))
     print(db.lookup6(bytes([0x2a,1,0x6e,0xe0, 0,1, 2,1,   0,0,0,0,0xB,0xAD,0xC0,0xDE])))
     print(db.lookup("1.1.1.1"))
