@@ -14,15 +14,15 @@ Done:
 - speed optimization! using pypy it's 2x faster than original libloc py binding...
 - no redundant v4->v6 addr conversions, no recursive binary tree traversal...
 
-Benchmark:  (lookup of all the 500k+ addresses from file 'v46cimek2')
-- original libloc py-binding (python3.10):  1385 ms
-- my code running by pypy (3.10): 755 ms !!!
-- my code running by python3.10: 4794 ms
-- my code running by python3.11: 4179 ms  (pure python only 3x slower than C code)
-
-
 TODO:
 - maybe a better API...
+
+Benchmark:  (lookup of all the 500k+ unique addresses from file 'v46cimek2')
+- original libloc py-binding (python3.10):  1385 ms
+- my code running by pypy (3.10): 564 ms !!!
+- my code running by python3.10: 3650 ms
+- my code running by python3.11: 3074 ms  (pure python only ~2x slower than libloc C code)
+
 
 Usage:
 
