@@ -7,10 +7,19 @@ Also look at my minimal C implementation here:  https://github.com/gereoffy/ipst
 Get database from:
 - https://location.ipfire.org/databases/1/location.db.xz
 
-Working:
+Done:
 - open database (even from xz file) and check magic
 - load database headers & data (in linear order)
 - IPv4 & IPv6 address lookup (from bytes or string format)
+- speed optimization! using pypy it's 2x faster than original libloc py binding...
+- no redundant v4->v6 addr conversions, no recursive binary tree traversal...
+
+Benchmark:  (lookup of all the 500k+ addresses from file 'v46cimek2')
+- original libloc py-binding (python3.10):  1385 ms
+- my code running by pypy (3.10): 755 ms !!!
+- my code running by python3.10: 4794 ms
+- my code running by python3.11: 4179 ms  (pure python only 3x slower than C code)
+
 
 TODO:
 - maybe a better API...
