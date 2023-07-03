@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 
 class LocDB:
-  def __init__(self,fn="/var/lib/location/database.db",debug=0):
+  def __init__(self,fn="/var/lib/location/database.db",debug=2):
 
     if fn.endswith(".xz"):
         import lzma
@@ -45,6 +45,8 @@ class LocDB:
     self.vendor=self.getstr(getint(8))
     self.descr=self.getstr(getint(12))
     self.license=self.getstr(getint(16))
+    
+    self.asncache={}
 
     # find root node for mapped IPv4 lookups:  [0000:0000:0000:0000:0000:FFFF:xxxx:xxxx/96]
     nxt=0
@@ -76,12 +78,18 @@ class LocDB:
         print("max net: %d / %d"%(maxnet,netsize))
 
         pos=0
+        maxasn=0
+        maxnid=0
         while pos<len(self.data["as"]):
             node=self.data["as"][pos:pos+8]
             pos+=8
             asn=int.from_bytes(node[0:4],byteorder="big",signed=False)
             nid=int.from_bytes(node[4:8],byteorder="big",signed=False)
-            print(asn,nid,self.getstr(nid))
+            if asn>maxasn: maxasn=asn
+            if nid>maxnid: maxnid=nid
+#            print(asn,nid,self.getstr(nid))
+        # ASN: 96997 entries, max asn=401308  max nid=1694094
+        print("ASN: %d entries, max asn=%d  max nid=%d"%(len(self.data["as"])//8,maxasn,maxnid))
 
   def getstr(self,i):
     s=self.data["po"][i:i+256] # max string len???
@@ -89,12 +97,14 @@ class LocDB:
     return s[:j].decode("utf-8")
 
   def get_as(self, asfind):
+    if asfind in self.asncache: return self.getstr(self.asncache[asfind])
     p1,p2=0,len(self.data["as"])//8
     while p1<p2:
         pos=(p1+p2)//2  # do binary search!  avg 15 steps/lookup
         x=int.from_bytes(self.data["as"][pos*8:pos*8+4],byteorder="big",signed=False)
         if asfind==x:
             nid=int.from_bytes(self.data["as"][pos*8+4:pos*8+8],byteorder="big",signed=False)
+            self.asncache[asfind]=nid
             return self.getstr(nid)
         if asfind>x: p1=pos+1
         else: p2=pos
@@ -126,10 +136,10 @@ class LocDB:
     ip=int.from_bytes(address,byteorder="big",signed=False)
     mask=0
     while mask<32:
-      bit=(ip>>29)&4  # == 4*((ip>>31)&1)
 #      net=(data[nxt+8]<<24)|(data[nxt+9]<<16)|(data[nxt+10]<<8)|data[nxt+11]
       net=int.from_bytes(data[nxt+8:nxt+12],byteorder="big",signed=True)
       if net>=0: ret=(net,mask)
+      bit=(ip>>29)&4  # == 4*((ip>>31)&1)
       nxt=12*int.from_bytes(data[nxt+bit:nxt+bit+4],byteorder="big",signed=False)
       if nxt==0: break
       mask+=1
@@ -188,4 +198,5 @@ if __name__ == "__main__":
 #        if not res: print("%d.%d.%d.%d"%(address[0],address[1],address[2],address[3]))
     t0=time.time()-t0
     print("Lookup time: %d ms  avg: %5.3f ns/ip (%d total)"%(1000.0*t0, 1000000.0*t0/len(cimek), len(cimek) ))
-
+#    print(len(db.asncache)) # 7681
+    
